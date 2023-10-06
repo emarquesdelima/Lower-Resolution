@@ -1,12 +1,14 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox
 import ffmpeg
-import py7zr
 
-def compress_video(input_file, output_file, height=480):
+def reduce_resolution(input_file, output_file, height=480):
     try:
         stream = ffmpeg.input(input_file)
+        # First scale to desired height, keeping aspect ratio
         stream = ffmpeg.filter(stream, 'scale', '-1', str(height))
+        # Then round width to nearest even number
+        stream = ffmpeg.filter(stream, 'scale', 'trunc(iw/2)*2', 'ih')
         stream = ffmpeg.output(stream, output_file)
         ffmpeg.run(stream)
         return True
@@ -14,70 +16,42 @@ def compress_video(input_file, output_file, height=480):
         print(e)
         return False
 
-def compress_7z(source, output):
-    try:
-        with py7zr.SevenZipFile(output, mode='w') as z:
-            z.writeall(source)
-        return True
-    except Exception as e:
-        print(e)
-        return False
 
-def decompress_7z(source, output_dir):
-    try:
-        with py7zr.SevenZipFile(source, mode='r') as z:
-            z.extractall(path=output_dir)
-        return True
-    except Exception as e:
-        print(e)
-        return False
+def select_input_file():
+    filepath = filedialog.askopenfilename(title="Select Video File", filetypes=(("MP4 files", "*.mp4"), ("All files", "*.*")))
+    input_file_var.set(filepath)
 
-def handle_action():
+def compress_video():
     input_file = input_file_var.get()
-    if not input_file:
+    output_file = filedialog.asksaveasfilename(title="Save Compressed Video", defaultextension=".mp4", filetypes=(("MP4 files", "*.mp4"), ("All files", "*.*")))
+    
+    if not input_file or not output_file:
         return
-
-    action = action_var.get()
-    if action == "Compress Video":
-        output_file = filedialog.asksaveasfilename(title="Save Compressed Video", defaultextension=".mp4", filetypes=(("MP4 files", "*.mp4"), ("All files", "*.*")))
-        if not output_file:
-            return
-        height = resolution_var.get()
-        success = compress_video(input_file, output_file, height)
-    elif action == "Compress to 7z":
-        output_file = filedialog.asksaveasfilename(title="Save as 7z", defaultextension=".7z", filetypes=(("7z files", "*.7z"), ("All files", "*.*")))
-        if not output_file:
-            return
-        success = compress_7z(input_file, output_file)
-    elif action == "Decompress from 7z":
-        output_dir = filedialog.askdirectory(title="Select Output Directory")
-        if not output_dir:
-            return
-        success = decompress_7z(input_file, output_dir)
-
+    
+    height = resolution_var.get()
+    success = reduce_resolution(input_file, output_file, height)
+    
     if success:
-        messagebox.showinfo("Success", f"{action} successful!")
+        messagebox.showinfo("Success", "Video compressed successfully!")
     else:
-        messagebox.showerror("Error", f"Failed to {action}. Please try again.")
+        messagebox.showerror("Error", "Failed to compress video. Please try again.")
 
+# Create the main window
 root = tk.Tk()
-root.title("Video & 7z Handler")
+root.title("Video Compressor")
 
+# Variables
 input_file_var = tk.StringVar()
 resolution_var = tk.IntVar(value=480)
-action_var = tk.StringVar(value="Compress Video")
 
-tk.Label(root, text="Select File/Folder:").pack(pady=10)
+# Layout
+tk.Label(root, text="Select Video:").pack(pady=10)
 tk.Entry(root, textvariable=input_file_var, width=40).pack(padx=20, pady=5)
-tk.Button(root, text="Browse", command=lambda: input_file_var.set(filedialog.askopenfilename())).pack(pady=10)
+tk.Button(root, text="Browse", command=select_input_file).pack(pady=10)
 
-tk.Label(root, text="Action:").pack(pady=10)
-actions = ["Compress Video", "Compress to 7z", "Decompress from 7z"]
-tk.OptionMenu(root, action_var, *actions).pack(pady=5)
-
-tk.Label(root, text="Desired Height (only for video compression, e.g., 480 for 480p):").pack(pady=10)
+tk.Label(root, text="Desired Height (e.g., 480 for 480p):").pack(pady=10)
 tk.Entry(root, textvariable=resolution_var, width=10).pack(pady=5)
 
-tk.Button(root, text="Execute", command=handle_action).pack(pady=20)
+tk.Button(root, text="Compress Video", command=compress_video).pack(pady=20)
 
 root.mainloop()
